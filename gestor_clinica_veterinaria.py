@@ -318,6 +318,45 @@ conexao_clinica.close()
 
 print("Banco carregado e dados inseridos com sucesso!")
 
+def pagina_usuario():
+    st.success(f"👋 Olá, {st.session_state.email}")
+    st.markdown("---")
+    st.text(f"👋 Usuário")
+
+    # Criando as abas na página do usuário
+
+    aba_perfil, aba_pets, aba_agendar, aba_historico = st.tabs([
+        "👤 Meu Perfil", 
+        "🐾 Meus Pets", 
+        "📅 Agendar Consulta", 
+        "📋 Minhas Consultas"
+        ])
+    
+    with aba_perfil:
+        st.subheader("Seus Dados Pessoais")
+    # Coloque o formulário de tutor aqui...
+    
+    with aba_pets:
+        st.subheader("Cadastre e gerencie seus Pets")
+    # Coloque o formulário e a lista de pets aqui...
+
+# E assim por diante para as outras abas...
+
+
+def pagina_admin():
+    st.success(f"👋 Olá, {st.session_state.email}")
+    st.markdown("---")
+    st.text(f"👋 Admin")
+
+
+def pagina_medico():
+    st.success(f"👋 Olá, {st.session_state.email}")
+    st.markdown("---")
+    st.text(f"👋 Médico")
+
+
+
+
 def validar_email(email):
     if "@" not in email or "." not in email.split("@")[-1]:
         return False, "E-mail inválido"
@@ -377,8 +416,20 @@ if not st.session_state.logado:
                             conexao_clinica.close()
 
 else:
-    st.success(f"👋 Olá, {st.session_state.email}")
-    st.markdown("---")
+    if (st.session_state.tipo == "Usuário"):
+        pagina_usuario()
+    else:
+        conexao_clinica = conectar_banco()
+        cursor_clinica = conexao_clinica.cursor()
+        cursor_clinica.execute("SELECT Tipo FROM Colaboradores WHERE Email = ?", (st.session_state.email,))
+        colaborador = cursor_clinica.fetchone()
+        if (colaborador[0] == "Admin"):
+            pagina_admin()
+        else:
+            pagina_medico()
+
+    # st.success(f"👋 Olá, {st.session_state.email}")
+    # st.markdown("---")
 
     # aba_pagamento, aba_historico = st.tabs(["💳 Realizar Pagamento", "📜 Histórico de Transações"])
 
