@@ -120,6 +120,9 @@
 # #     return partes[0][0] + "***@" + partes[1]
 
 
+from gestor_banco_de_dados import [conectar_banco, criar_tabelas, hash_senha, buscar_usuario, buscar_colaborador, buscar_tutor_por_usuario, salvar_ou_atualizar_tutor
+                                   ]
+
 import random
 import hashlib
 import sqlite3
@@ -267,6 +270,45 @@ def salvar_ou_atualizar_tutor(usuario_id, nome, email, telefone):
             INSERT INTO Tutores (Usuario_ID, Nome, Email, Telefone) 
             VALUES (?, ?, ?, ?)
         ''', (usuario_id, nome, email, telefone))
+        
+    conexao_clinica.commit()
+    cursor_clinica.close()
+    conexao_clinica.close()
+
+def obter_tutor_id(usuario_id):
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    cursor_clinica.execute("SELECT ID, Nome FROM Tutores WHERE Usuario_ID = ?", (usuario_id,))
+    tutor = cursor_clinica.fetchone()
+    cursor_clinica.close()
+    conexao_clinica.close()
+    return tutor # Retorna (ID, Nome) ou None
+
+def listar_pets_do_tutor(tutor_id):
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    # Busca todos os pets vinculados a este tutor_id
+    cursor_clinica.execute("SELECT ID, Pet, Especie, Raca, Sexo FROM Pets WHERE Tutor_ID = ?", (tutor_id,))
+    pets = cursor_clinica.fetchall()
+    cursor_clinica.close()
+    conexao_clinica.close()
+    return pets # Retorna uma lista de tuplas
+
+def salvar_ou_atualizar_pet(pet_id, usuario_id, tutor_id, nome_tutor, nome_pet, especie, raca, sexo):
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    
+    if pet_id: # Se recebeu um ID, significa que estamos atualizando
+        cursor_clinica.execute('''
+            UPDATE Pets 
+            SET Pet = ?, Especie = ?, Raca = ?, Sexo = ? 
+            WHERE ID = ?
+        ''', (nome_pet, especie, raca, sexo, pet_id))
+    else: # Se não tem ID, é um pet novo
+        cursor_clinica.execute('''
+            INSERT INTO Pets (Usuario_ID, Tutor_ID, Tutor, Pet, Especie, Raca, Sexo) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (usuario_id, tutor_id, nome_tutor, nome_pet, especie, raca, sexo))
         
     conexao_clinica.commit()
     cursor_clinica.close()
@@ -420,7 +462,7 @@ def pagina_usuario():
                     )
                     st.success("Dados salvos com sucesso!")
                     st.rerun() # Atualiza a tela para mostrar os dados novos
-                    
+
     # Coloque o formulário de tutor aqui...
     
     with aba_pets:
