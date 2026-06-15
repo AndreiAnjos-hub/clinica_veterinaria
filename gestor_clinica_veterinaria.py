@@ -120,8 +120,10 @@
 # #     return partes[0][0] + "***@" + partes[1]
 
 
-from gestor_banco_de_dados import [conectar_banco, criar_tabelas, hash_senha, buscar_usuario, buscar_colaborador, buscar_tutor_por_usuario, salvar_ou_atualizar_tutor
-                                   ]
+from gestor_banco_de_dados import (
+    conectar_banco, criar_tabelas, hash_senha, buscar_usuario, buscar_colaborador, 
+    buscar_tutor_por_usuario, salvar_ou_atualizar_tutor, obter_tutor_id,
+    listar_pets_do_tutor, salvar_ou_atualizar_pet)
 
 import random
 import hashlib
@@ -130,192 +132,9 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
-
-def conectar_banco():
-    return sqlite3.connect("BandoDeDados_ClinicaVeterinaria.db")
-
-def criar_tabelas():
-    conexao_clinica = conectar_banco()
-    cursor_clinica = conexao_clinica.cursor()
-
-    cursor_clinica.execute('''
-        CREATE TABLE IF NOT EXISTS Usuarios (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Email TEXT UNIQUE,
-            Senha TEXT,
-            Tipo TEXT CHECK(Tipo IN ('Usuário','Colaborador')) NOT NULL
-        )
-    ''')
-
-    cursor_clinica.execute('''
-        CREATE TABLE IF NOT EXISTS Tutores (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Usuario_ID INTEGER,
-            Nome TEXT,
-            Email TEXT UNIQUE,
-            Telefone TEXT,
-            FOREIGN KEY (Usuario_ID) REFERENCES Usuarios(ID),
-            FOREIGN KEY (Email) REFERENCES Usuarios(Email)
-        )
-    ''')
-    
-    cursor_clinica.execute('''
-        CREATE TABLE IF NOT EXISTS Pets (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Tutor_ID INTEGER,
-            Tutor TEXT,
-            Pet TEXT,
-            Especie TEXT,
-            Raca REAL,
-            Sexo TEXT,
-            FOREIGN KEY (Tutor_ID) REFERENCES Tutores(ID),
-            FOREIGN KEY (Tutor) REFERENCES Tutores(Nome)
-        )
-    ''')
-
-    cursor_clinica.execute('''
-        CREATE TABLE IF NOT EXISTS Colaboradores (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Usuario_ID INTEGER UNIQUE,
-            Nome TEXT,
-            Email TEXT UNIQUE,
-            Tipo TEXT CHECK(Tipo IN ('Admin','Médico')) NOT NULL,
-            FOREIGN KEY (Usuario_ID) REFERENCES Usuarios(ID)
-        )
-    ''')
-
-    cursor_clinica.execute('''
-        CREATE TABLE IF NOT EXISTS Médicos (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Colaborador_ID INTEGER UNIQUE,
-            Nome TEXT,
-            CRMV TEXT UNIQUE,
-            Email TEXT UNIQUE,
-            FOREIGN KEY (Colaborador_ID) REFERENCES Colaboradores(ID),
-            FOREIGN KEY (Nome) REFERENCES Colaboradores(Nome),
-            FOREIGN KEY (Email) REFERENCES Colaboradores(Email)
-        )
-    ''')
-
-    cursor_clinica.execute('''
-        CREATE TABLE IF NOT EXISTS Consultas (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Tutor_ID INTEGER,
-            Pet_ID INTEGER,
-            Medico_ID INTEGER,
-            Data TEXT,
-            Horario TEXT,
-            Status TEXT DEFAULT 'Agendado', -- 'Agendado', 'Concluído', 'Cancelado'
-            FOREIGN KEY (Tutor_ID) REFERENCES Tutores(ID),
-            FOREIGN KEY (Pet_ID) REFERENCES Pets(ID),
-            FOREIGN KEY (Medico_ID) REFERENCES Médicos(ID)
-        )
-    ''')
-
-    conexao_clinica.commit()
-    conexao_clinica.close()
-
-# Garante a criação das tabelas
 criar_tabelas()
 
-def hash_senha(senha):
-    return hashlib.sha256(senha.encode()).hexdigest()
-
-
-def buscar_usuario(email, senha):
-    conexao_clinica = conectar_banco()
-    cursor_clinica = conexao_clinica.cursor()
-    cursor_clinica.execute("SELECT ID, Email FROM Usuarios WHERE Email = ? AND Senha = ?", (email, senha))
-    usuario = cursor_clinica.fetchone()
-    cursor_clinica.close()
-    conexao_clinica.close()
-    return usuario
-
-def buscar_colaborador(email):
-    conexao_clinica = conectar_banco()
-    cursor_clinica = conexao_clinica.cursor()
-    cursor_clinica.execute("SELECT ID, Nome, Email FROM Colaboradores WHERE Email = ?", (email,))
-    colaborador = cursor_clinica.fetchone()
-    cursor_clinica.close()
-    conexao_clinica.close()
-    return colaborador
-
-def buscar_tutor_por_usuario(usuario_id):
-    conexao_clinica = conectar_banco()
-    cursor_clinica = conexao_clinica.cursor()
-    cursor_clinica.execute("SELECT Nome, Telefone FROM Tutores WHERE Usuario_ID = ?", (usuario_id,))
-    tutor = cursor_clinica.fetchone()
-    cursor_clinica.close()
-    conexao_clinica.close()
-    return tutor  # Retorna (Nome, Telefone) ou None
-
-def salvar_ou_atualizar_tutor(usuario_id, nome, email, telefone):
-    conexao_clinica = conectar_banco()
-    cursor_clinica = conexao_clinica.cursor()
-    
-    # Verifica se já existe um registro para esse usuario_id
-    cursor_clinica.execute("SELECT ID FROM Tutores WHERE Usuario_ID = ?", (usuario_id,))
-    existe = cursor_clinica.fetchone()
-    
-    if existe:
-        # Se existe, atualiza os dados
-        cursor_clinica.execute('''
-            UPDATE Tutores 
-            SET Nome = ?, Telefone = ? 
-            WHERE Usuario_ID = ?
-        ''', (nome, telefone, usuario_id))
-    else:
-        # Se não existe, insere um novo
-        cursor_clinica.execute('''
-            INSERT INTO Tutores (Usuario_ID, Nome, Email, Telefone) 
-            VALUES (?, ?, ?, ?)
-        ''', (usuario_id, nome, email, telefone))
-        
-    conexao_clinica.commit()
-    cursor_clinica.close()
-    conexao_clinica.close()
-
-def obter_tutor_id(usuario_id):
-    conexao_clinica = conectar_banco()
-    cursor_clinica = conexao_clinica.cursor()
-    cursor_clinica.execute("SELECT ID, Nome FROM Tutores WHERE Usuario_ID = ?", (usuario_id,))
-    tutor = cursor_clinica.fetchone()
-    cursor_clinica.close()
-    conexao_clinica.close()
-    return tutor # Retorna (ID, Nome) ou None
-
-def listar_pets_do_tutor(tutor_id):
-    conexao_clinica = conectar_banco()
-    cursor_clinica = conexao_clinica.cursor()
-    # Busca todos os pets vinculados a este tutor_id
-    cursor_clinica.execute("SELECT ID, Pet, Especie, Raca, Sexo FROM Pets WHERE Tutor_ID = ?", (tutor_id,))
-    pets = cursor_clinica.fetchall()
-    cursor_clinica.close()
-    conexao_clinica.close()
-    return pets # Retorna uma lista de tuplas
-
-def salvar_ou_atualizar_pet(pet_id, usuario_id, tutor_id, nome_tutor, nome_pet, especie, raca, sexo):
-    conexao_clinica = conectar_banco()
-    cursor_clinica = conexao_clinica.cursor()
-    
-    if pet_id: # Se recebeu um ID, significa que estamos atualizando
-        cursor_clinica.execute('''
-            UPDATE Pets 
-            SET Pet = ?, Especie = ?, Raca = ?, Sexo = ? 
-            WHERE ID = ?
-        ''', (nome_pet, especie, raca, sexo, pet_id))
-    else: # Se não tem ID, é um pet novo
-        cursor_clinica.execute('''
-            INSERT INTO Pets (Usuario_ID, Tutor_ID, Tutor, Pet, Especie, Raca, Sexo) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (usuario_id, tutor_id, nome_tutor, nome_pet, especie, raca, sexo))
-        
-    conexao_clinica.commit()
-    cursor_clinica.close()
-    conexao_clinica.close()
-
-
-## --- INSERÇÃO DE DADOS TESTE ---
+# --- INSERÇÃO DE DADOS TESTE ---
 
 conexao_clinica = conectar_banco()
 cursor_clinica = conexao_clinica.cursor() # CRUCIAL: Criando o cursor para o fluxo principal
@@ -464,11 +283,103 @@ def pagina_usuario():
                     st.rerun() # Atualiza a tela para mostrar os dados novos
 
     # Coloque o formulário de tutor aqui...
-    
     with aba_pets:
-        st.subheader("Cadastre e gerencie seus Pets")
-        st.markdown("---")
-    # Coloque o formulário e a lista de pets aqui...
+        st.subheader("🐾 Gerenciar Meus Pets")
+        
+        info_tutor = obter_tutor_id(st.session_state.usuario_id)
+        
+        if not info_tutor:
+            st.error("⚠️ Você precisa preencher seus dados pessoais na aba '👤 Meu Perfil' antes de cadastrar um pet.")
+        else:
+            tutor_id_banco = info_tutor[0]
+            nome_tutor_banco = info_tutor[1]
+            # Dados para o selectbox de Raça -> Espécie
+            # # Chave: Raça, Valor: Espécie correspondente
+            dados_racas = {
+                "Vira-lata (SRD)": "Canina/Felina",
+                "Golden Retriever": "Canina",
+                "Persa": "Felina",
+                "Pastor Alemão": "Canina",
+                "Siamês": "Felina",
+                "Poodle": "Canina",
+                "Calopsita": "Ave",
+                "Canário": "Ave"
+                }
+            
+            # Opções de ação para o usuário
+            acao_pet = st.radio("O que deseja fazer?", ["Cadastrar Novo Pet", "Atualizar Pet Existente"], horizontal=True)
+            
+            # Inicializando variáveis do formulário
+            pet_id_selecionado = None
+            nome_pet_inicial = ""
+            sexo_inicial = "Macho"
+            raca_inicial = "Vira-lata (SRD)"
+            
+            # Se o usuário quiser atualizar, precisamos carregar os pets dele
+            if acao_pet == "Atualizar Pet Existente":
+                lista_de_pets = listar_pets_do_tutor(tutor_id_banco)
+                
+                if not lista_de_pets:
+                    st.info("Você ainda não tem nenhum pet cadastrado para atualizar.")
+                    # Força a voltar para o cadastro se a lista estiver vazia
+                    st.stop() 
+                else:
+                    # Criamos um dicionário para o Selectbox mostrar o nome do pet bonitinho
+                    opcoes_pets = {f"{p[1]} ({p[2]} - {p[3]})": p for p in lista_de_pets}
+                    pet_escolhido_texto = st.selectbox("Selecione o Pet que deseja editar:", list(opcoes_pets.keys()))
+                    
+                    # Extrai os dados do pet selecionado
+                    pet_dados = opcoes_pets[pet_escolhido_texto]
+                    pet_id_selecionado = pet_dados[0]
+                    nome_pet_inicial = pet_dados[1]
+
+                    # A raça e sexo salvos no banco (se existirem na nossa lista padrão)
+                    raca_inicial = pet_dados[3] if pet_dados[3] in dados_racas else "Vira-lata (SRD)"
+                    sexo_inicial = pet_dados[4]
+                    
+            # 2. FORMULÁRIO DE CADASTRO / EDIÇÃO
+            # # Usamos uma chave dinâmica no form para resetar os campos no reload automático do Streamlit
+            form_key = f"form_pet_{pet_id_selecionado}" if pet_id_selecionado else "form_novo_pet"
+            
+            with st.form(key=form_key):
+                nome_pet = st.text_input("Nome do Pet", value=nome_pet_inicial)
+                
+                # Selectbox da Raça
+                lista_racas = list(dados_racas.keys())
+                index_raca = lista_racas.index(raca_inicial)
+                raca_selecionada = st.selectbox("Selecione a Raça", lista_racas, index=index_raca)
+                
+                # Descobre a Espécie AUTOMATICAMENTE baseado na raça escolhida
+                especie_automatica = dados_racas[raca_selecionada]
+                
+                # Exibe em um campo de texto desabilitado (só para o usuário ver)
+                st.text_input("Espécie (Definida pela Raça)", value=especie_automatica, disabled=True)
+                
+                # Campo de Sexo
+                opcoes_sexo = ["Macho", "Fêmea"]
+                index_sexo = opcoes_sexo.index(sexo_inicial) if sexo_inicial in opcoes_sexo else 0
+                sexo_selecionado = st.selectbox("Sexo", opcoes_sexo, index=index_sexo)
+                
+                # Botão de envio
+                texto_botao_pet = "Salvar Alterações" if pet_id_selecionado else "Cadastrar Pet"
+                botao_salvar_pet = st.form_submit_button(texto_botao_pet)
+                
+                if botao_salvar_pet:
+                    if not nome_pet:
+                        st.warning("O nome do seu pet não pode ficar em branco.")
+                    else:
+                        # Envia para a função do banco de dados
+                        salvar_ou_atualizar_pet(
+                            pet_id=pet_id_selecionado,
+                            tutor_id=tutor_id_banco,
+                            nome_tutor=nome_tutor_banco,
+                            nome_pet=nome_pet,
+                            especie=especie_automatica,
+                            raca=raca_selecionada,
+                            sexo=sexo_selecionado
+                            )
+                        st.success(f"Pet '{nome_pet}' salvo com sucesso!")
+                        st.rerun() # Dá o reload na página, limpando os campos ou aplicando a alteração!
 
     with aba_agendar:
         st.subheader("Agende uma consulta")

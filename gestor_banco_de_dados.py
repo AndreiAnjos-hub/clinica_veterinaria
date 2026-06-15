@@ -86,9 +86,6 @@ def criar_tabelas():
     conexao_clinica.commit()
     conexao_clinica.close()
 
-# Garante a criação das tabelas
-criar_tabelas()
-
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
@@ -164,7 +161,7 @@ def listar_pets_do_tutor(tutor_id):
     conexao_clinica.close()
     return pets # Retorna uma lista de tuplas
 
-def salvar_ou_atualizar_pet(pet_id, usuario_id, tutor_id, nome_tutor, nome_pet, especie, raca, sexo):
+def salvar_ou_atualizar_pet(pet_id, tutor_id, nome_tutor, nome_pet, especie, raca, sexo):
     conexao_clinica = conectar_banco()
     cursor_clinica = conexao_clinica.cursor()
     
@@ -176,9 +173,9 @@ def salvar_ou_atualizar_pet(pet_id, usuario_id, tutor_id, nome_tutor, nome_pet, 
         ''', (nome_pet, especie, raca, sexo, pet_id))
     else: # Se não tem ID, é um pet novo
         cursor_clinica.execute('''
-            INSERT INTO Pets (Usuario_ID, Tutor_ID, Tutor, Pet, Especie, Raca, Sexo) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (usuario_id, tutor_id, nome_tutor, nome_pet, especie, raca, sexo))
+            INSERT INTO Pets (, Tutor_ID, Tutor, Pet, Especie, Raca, Sexo) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (tutor_id, nome_tutor, nome_pet, especie, raca, sexo))
         
     conexao_clinica.commit()
     cursor_clinica.close()
