@@ -194,6 +194,21 @@ def criar_tabelas():
         )
     ''')
 
+    cursor_clinica.execute('''
+        CREATE TABLE IF NOT EXISTS Consultas (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Tutor_ID INTEGER,
+            Pet_ID INTEGER,
+            Medico_ID INTEGER,
+            Data TEXT,
+            Horario TEXT,
+            Status TEXT DEFAULT 'Agendado', -- 'Agendado', 'Concluído', 'Cancelado'
+            FOREIGN KEY (Tutor_ID) REFERENCES Tutores(ID),
+            FOREIGN KEY (Pet_ID) REFERENCES Pets(ID),
+            FOREIGN KEY (Medico_ID) REFERENCES Médicos(ID)
+        )
+    ''')
+
     conexao_clinica.commit()
     conexao_clinica.close()
 
@@ -334,13 +349,21 @@ def pagina_usuario():
     
     with aba_perfil:
         st.subheader("Seus Dados Pessoais")
+        st.markdown("---")
     # Coloque o formulário de tutor aqui...
     
     with aba_pets:
         st.subheader("Cadastre e gerencie seus Pets")
+        st.markdown("---")
     # Coloque o formulário e a lista de pets aqui...
 
-# E assim por diante para as outras abas...
+    with aba_agendar:
+        st.subheader("Agende uma consulta")
+        st.markdown("---")
+
+    with aba_historico:
+        st.subheader("Consultas salvas")
+        st.markdown("---")
 
 
 def pagina_admin():
