@@ -237,6 +237,41 @@ def buscar_colaborador(email):
     conexao_clinica.close()
     return colaborador
 
+def buscar_tutor_por_usuario(usuario_id):
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    cursor_clinica.execute("SELECT Nome, Telefone FROM Tutores WHERE Usuario_ID = ?", (usuario_id,))
+    tutor = cursor_clinica.fetchone()
+    cursor_clinica.close()
+    conexao_clinica.close()
+    return tutor  # Retorna (Nome, Telefone) ou None
+
+def salvar_ou_atualizar_tutor(usuario_id, nome, email, telefone):
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    
+    # Verifica se já existe um registro para esse usuario_id
+    cursor_clinica.execute("SELECT ID FROM Tutores WHERE Usuario_ID = ?", (usuario_id,))
+    existe = cursor_clinica.fetchone()
+    
+    if existe:
+        # Se existe, atualiza os dados
+        cursor_clinica.execute('''
+            UPDATE Tutores 
+            SET Nome = ?, Telefone = ? 
+            WHERE Usuario_ID = ?
+        ''', (nome, telefone, usuario_id))
+    else:
+        # Se não existe, insere um novo
+        cursor_clinica.execute('''
+            INSERT INTO Tutores (Usuario_ID, Nome, Email, Telefone) 
+            VALUES (?, ?, ?, ?)
+        ''', (usuario_id, nome, email, telefone))
+        
+    conexao_clinica.commit()
+    cursor_clinica.close()
+    conexao_clinica.close()
+
 
 ## --- INSERÇÃO DE DADOS TESTE ---
 
@@ -348,8 +383,44 @@ def pagina_usuario():
         ])
     
     with aba_perfil:
-        st.subheader("Seus Dados Pessoais")
-        st.markdown("---")
+        st.subheader("📋 Seus Dados Pessoais")
+        st.write("Mantenha suas informações de contato atualizadas para que a clínica possa falar com você.")
+
+        # Busca no banco se este usuário já preencheu o perfil de Tutor
+        dados_tutor = buscar_tutor_por_usuario(st.session_state.usuario_id)
+
+        # Se ele já tiver dados salvos, preenchemos o formulário com o que existe
+        if dados_tutor:
+            nome_inicial = dados_tutor[0]
+            telefone_inicial = dados_tutor[1]
+            texto_botao = "Atualizar Meus Dados"
+        else:
+            nome_inicial = ""
+            telefone_inicial = ""
+            texto_botao = "Salvar Perfil"
+
+        # Formulário do Streamlit
+        with st.form("form_dados_tutor"):
+            nome_tutor = st.text_input("Nome Completo", value=nome_inicial)
+            telefone_tutor = st.text_input("Telefone de Contato (com DDD)", value=telefone_inicial, placeholder="(00) 99999-9999")
+            
+            # Botão de envio do formulário
+            botao_salvar = st.form_submit_button(texto_botao)
+
+            if botao_salvar:
+                if not nome_tutor or not telefone_tutor:
+                    st.warning("Por favor, preencha todos os campos antes de salvar.")
+                else:
+                    # Executa a função para salvar ou atualizar no SQLite
+                    salvar_ou_atualizar_tutor(
+                        usuario_id=st.session_state.usuario_id,
+                        nome=nome_tutor,
+                        email=st.session_state.email, # O email vem do session_state do login
+                        telefone=telefone_tutor
+                    )
+                    st.success("Dados salvos com sucesso!")
+                    st.rerun() # Atualiza a tela para mostrar os dados novos
+                    
     # Coloque o formulário de tutor aqui...
     
     with aba_pets:
