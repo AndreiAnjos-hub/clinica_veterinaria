@@ -62,6 +62,7 @@ def criar_tabelas():
             Nome TEXT,
             CRMV TEXT UNIQUE,
             Email TEXT UNIQUE,
+            Turno TEXT UNIQUE,
             FOREIGN KEY (Colaborador_ID) REFERENCES Colaboradores(ID),
             FOREIGN KEY (Nome) REFERENCES Colaboradores(Nome),
             FOREIGN KEY (Email) REFERENCES Colaboradores(Email)
@@ -173,10 +174,92 @@ def salvar_ou_atualizar_pet(pet_id, tutor_id, nome_tutor, nome_pet, especie, rac
         ''', (nome_pet, especie, raca, sexo, pet_id))
     else: # Se não tem ID, é um pet novo
         cursor_clinica.execute('''
-            INSERT INTO Pets (, Tutor_ID, Tutor, Pet, Especie, Raca, Sexo) 
+            INSERT INTO Pets (Tutor_ID, Tutor, Pet, Especie, Raca, Sexo) 
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (tutor_id, nome_tutor, nome_pet, especie, raca, sexo))
         
     conexao_clinica.commit()
     cursor_clinica.close()
     conexao_clinica.close()
+
+def listar_usuarios_colaboradores_sem_crmv():
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    # Busca usuários do tipo 'Colaborador' que ainda não estão cadastrados na tabela Médicos
+    cursor_clinica.execute('''
+        SELECT ID, Email FROM Usuarios 
+        WHERE Tipo = 'Colaborador' 
+        AND ID NOT IN (SELECT Usuario_ID FROM Colaboradores WHERE Tipo = 'Médico')
+    ''')
+    usuarios = cursor_clinica.fetchall()
+    cursor_clinica.close()
+    conexao_clinica.close()
+    return usuarios
+
+def cadastrar_medico_completo(usuario_id, nome, email, crmv, tipo_turno):
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    try:
+        # 1. Insere na tabela Colaboradores se não existir
+        cursor_clinica.execute('''
+            INSERT OR IGNORE INTO Colaboradores (Usuario_ID, Nome, Email, Tipo)
+            VALUES (?, ?, ?, 'Médico')
+        ''', (usuario_id, nome, email))
+        
+        # Pega o ID gerado em Colaboradores
+        cursor_clinica.execute("SELECT ID FROM Colaboradores WHERE Usuario_ID = ?", (usuario_id,))
+        colaborador_id = cursor_clinica.fetchone()[0]
+        
+        # 2. Insere na tabela Médicos (Adicione uma coluna 'Turno' se quiser filtrar por turno)
+        # Para simplificar na faculdade, podemos guardar o turno aqui ou direto na agenda
+        cursor_clinica.execute('''
+            INSERT OR IGNORE INTO Médicos (Colaborador_ID, Nome, CRMV, Email, Turno)
+            VALUES (?, ?, ?, ?)
+        ''', (colaborador_id, nome, crmv, email, tipo_turno))
+        
+        conexao_clinica.commit()
+        return True
+    except Exception as e:
+        print(f"Erro ao cadastrar médico: {e}")
+        return False
+    finally:
+        cursor_clinica.close()
+        conexao_clinica.close()
+
+def listar_consultas_geral():
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    # Query que junta os dados das consultas com nomes de tutores, pets e médicos
+    cursor_clinica.execute('''
+        SELECT 
+            C.ID, T.Nome, P.Pet, M.Nome, C.Data, C.Horario, C.Status
+        FROM Consultas C
+        JOIN Tutores T ON C.Tutor_ID = T.ID
+        JOIN Pets P ON C.Pet_ID = P.ID
+        LEFT JOIN Médicos M ON C.Medico_ID = M.ID
+    ''')
+    consultas = cursor_clinica.fetchall()
+    cursor_clinica.close()
+    conexao_clinica.close()
+    return consultas
+
+def atualizar_status_e_medico_consulta(consulta_id, medico_id, novo_status):
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    cursor_clinica.execute('''
+        UPDATE Consultas
+        SET Medico_ID = ?, Status = ?
+        WHERE ID = ?
+    ''', (medico_id, novo_status, consulta_id))
+    conexao_clinica.commit()
+    cursor_clinica.close()
+    conexao_clinica.close()
+
+def listar_medicos_disponiveis():
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    cursor_clinica.execute("SELECT ID, Nome FROM Médicos")
+    medicos = cursor_clinica.fetchall()
+    cursor_clinica.close()
+    conexao_clinica.close()
+    return medicos

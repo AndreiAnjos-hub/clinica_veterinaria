@@ -123,7 +123,9 @@
 from gestor_banco_de_dados import (
     conectar_banco, criar_tabelas, hash_senha, buscar_usuario, buscar_colaborador, 
     buscar_tutor_por_usuario, salvar_ou_atualizar_tutor, obter_tutor_id,
-    listar_pets_do_tutor, salvar_ou_atualizar_pet)
+    listar_pets_do_tutor, salvar_ou_atualizar_pet, listar_usuarios_colaboradores_sem_crmv,
+    cadastrar_medico_completo, listar_consultas_geral, atualizar_status_e_medico_consulta,
+    listar_medicos_disponiveis)
 
 import random
 import hashlib
@@ -160,8 +162,8 @@ if usuario:
 
     if colaborador:
         cursor_clinica.execute('''
-            INSERT OR IGNORE INTO Médicos (Colaborador_ID, Nome, CRMV, Email) VALUES (?, ?, ?, ?)
-        ''', (colaborador[0], colaborador[1], "827477", colaborador[2]))
+            INSERT OR IGNORE INTO Médicos (Colaborador_ID, Nome, CRMV, Email, Turno) VALUES (?, ?, ?, ?, ?)
+        ''', (colaborador[0], colaborador[1], "827477", colaborador[2], "Manhã (07h às 12h)"))
         conexao_clinica.commit()
 
 
@@ -185,8 +187,8 @@ if usuario:
 
     if colaborador:
         cursor_clinica.execute('''
-            INSERT OR IGNORE INTO Médicos (Colaborador_ID, Nome, CRMV, Email) VALUES (?, ?, ?, ?)
-        ''', (colaborador[0], colaborador[1], "209891", colaborador[2]))
+            INSERT OR IGNORE INTO Médicos (Colaborador_ID, Nome, CRMV, Email, Turno) VALUES (?, ?, ?, ?, ?)
+        ''', (colaborador[0], colaborador[1], "209891", colaborador[2], ))
         conexao_clinica.commit()
 
 
@@ -279,8 +281,8 @@ def pagina_usuario():
                         email=st.session_state.email, # O email vem do session_state do login
                         telefone=telefone_tutor
                     )
-                    st.success("Dados salvos com sucesso!")
                     st.rerun() # Atualiza a tela para mostrar os dados novos
+                    st.success("Dados salvos com sucesso!")
 
     # Coloque o formulário de tutor aqui...
     with aba_pets:
@@ -298,12 +300,19 @@ def pagina_usuario():
             dados_racas = {
                 "Vira-lata (SRD)": "Canina/Felina",
                 "Golden Retriever": "Canina",
-                "Persa": "Felina",
+                "Labrador Retriever": "Canina",
+                "Dobermann": "Canina",
                 "Pastor Alemão": "Canina",
-                "Siamês": "Felina",
                 "Poodle": "Canina",
+                "Persa": "Felina",
+                "Siamês": "Felina",
+                "Sphynx": "Felina",
                 "Calopsita": "Ave",
-                "Canário": "Ave"
+                "Canário": "Ave",
+                "Periquito": "Ave",
+                "Papagaio": "Ave",
+                "Jabuti-piranga": "Répteis",
+                "Gecko-leopardo": "Répteis"
                 }
             
             # Opções de ação para o usuário
@@ -378,8 +387,8 @@ def pagina_usuario():
                             raca=raca_selecionada,
                             sexo=sexo_selecionado
                             )
-                        st.success(f"Pet '{nome_pet}' salvo com sucesso!")
                         st.rerun() # Dá o reload na página, limpando os campos ou aplicando a alteração!
+                        st.success(f"Pet '{nome_pet}' salvo com sucesso!")
 
     with aba_agendar:
         st.subheader("Agende uma consulta")
@@ -391,9 +400,117 @@ def pagina_usuario():
 
 
 def pagina_admin():
-    st.success(f"👋 Olá, {st.session_state.email}")
+    st.success(f"👋 Olá Admin, {st.session_state.email}")
     st.markdown("---")
-    st.text(f"👋 Admin")
+
+    if st.session_state.logado and st.session_state.tipo == "Admin":
+        st.title("⚙️ Painel do Administrador - Gestão da Clínica")
+        
+        aba_cadastrar, aba_agenda_medica, aba_gerenciar_consultas = st.tabs([
+            "👨‍⚕️ Cadastrar Médico", 
+            "⏰ Escalas e Horários", 
+            "📋 Gerenciar Consultas"
+            ])
+            
+        # ---------------------------------------------------------
+        # # ABA 1: CADASTRAR MÉDICO
+        # # ---------------------------------------------------------
+        with aba_cadastrar:
+            st.subheader("Cadastrar Novo Médico no Sistema")
+            st.write("Selecione um usuário do tipo colaborador pré-existente para ativá-lo como médico informando seu CRMV.")
+            
+            # Lista e-mails de contas que são colaboradores mas ainda não viraram médicos no sistema
+            colaboradores_disponiveis = listar_usuarios_colaboradores_sem_crmv()
+            
+            if not colaboradores_disponiveis:
+                st.info("Não há novos usuários colaboradores pendentes de cadastro médico.")
+            else:
+                # Cria dicionário para o selectbox mostrar o Email
+                dict_colab = {item[1]: item[0] for item in colaboradores_disponiveis}
+                email_selecionado = st.selectbox("Selecione o E-mail do Colaborador:", list(dict_colab.keys()))
+                usuario_id_selecionado = dict_colab[email_selecionado]
+                
+                with st.form("form_cadastro_medico"):
+                    nome_medico = st.text_input("Nome Completo do Médico")
+                    crmv_medico = st.text_input("Número do CRMV", placeholder="Ex: 12345-SP")
+                    turno = st.selectbox("Turno de Trabalho", ["Integral (07h às 17h)", "Manhã (07h às 12h)", "Tarde (12h às 17h)"])
+                    
+                    botao_medico = st.form_submit_button("Efetivar Médico")
+                    
+                    if botao_medico:
+                        if not nome_medico or not crmv_medico:
+                            st.warning("Preencha o Nome e o CRMV.")
+                        else:
+                            sucesso = cadastrar_medico_completo(usuario_id_selecionado, nome_medico, email_selecionado, crmv_medico, turno)
+                            if sucesso:
+                                st.success(f"Médico {nome_medico} cadastrado com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error("Erro ao salvar no banco. Verifique se o CRMV já existe.")
+        # ---------------------------------------------------------
+        # ABA 2: ESCALAS E HORÁRIOS (Para as regras de Negócio da Facul)
+        # ---------------------------------------------------------
+        with aba_agenda_medica:
+            st.subheader("⏰ Configuração de Turnos Disponíveis")
+            st.write("Os dois médicos iniciais estão configurados para o horário padrão da clínica:")
+            
+            # Demonstrando os horários padrões solicitados para a banca ver
+            st.info("**Horário de Funcionamento:** Segunda a Sexta — 07:00 às 17:00")
+            
+            # Uma tabela visual simples estática ou dinâmica das regras
+            dados_turnos = {
+                "Período": ["Manhã", "Tarde", "Integral"],
+                "Horário Inicial": ["07:00", "12:00", "07:00"],
+                "Horário Final": ["12:00", "17:00", "17:00"],
+                "Intervalo de Consultas": ["1 hora", "1 hora", "1 hora"]
+                }
+            st.table(dados_turnos)      
+
+        # ---------------------------------------------------------
+        # ABA 3: GERENCIAR CONSULTAS (Vincular Médico e Mudar Status)
+        # ---------------------------------------------------------
+        with aba_gerenciar_consultas:
+            st.subheader("📋 Painel Geral de Consultas Solicitadas")
+        
+            lista_consultas = listar_consultas_geral()
+            lista_medicos = listar_medicos_disponiveis()
+        
+            if not lista_consultas:
+                st.info("Nenhuma consulta agendada no momento.")
+            else:
+                # Mostra todas as consultas em formato amigável
+                for consulta in lista_consultas:
+                    c_id, tutor, pet, medico_nome, data, horario, status = consulta
+                 
+                    # Criando um card visual para cada consulta cadastrada
+                    with st.expander(f"📌 Consulta #{c_id} - Pet: {pet} ({data} às {horario})"):
+                        col_info, col_acao = st.columns(2)
+                        
+                        with col_info:
+                            st.write(f"**Tutor:** {tutor}")
+                            st.write(f"**Data/Hora:** {data} às {horario}")
+                            st.write(f"**Médico Atual:** {medico_nome if medico_nome else '⚠️ Não Vinculado'}")
+                            st.write(f"**Status Atual:** `{status}`")
+                        
+                        with col_acao:
+                            # Selectbox para escolher ou trocar o médico desta consulta
+                            dict_medicos = {m[1]: m[0] for m in lista_medicos}
+                            # Identifica o index atual do médico se já houver um vinculado
+                            lista_nomes_medicos = list(dict_medicos.keys())
+                            index_medico = lista_nomes_medicos.index(medico_nome) if medico_nome in lista_nomes_medicos else 0
+                        
+                            medico_escolhido = st.selectbox(f"Vincular Médico (Consulta #{c_id})", lista_nomes_medicos, index=index_medico)
+                        
+                            # Selectbox para atualizar o status
+                            status_opcoes = ["Agendado", "Em Andamento", "Concluído", "Cancelado"]
+                            index_status = status_opcoes.index(status) if status in status_opcoes else 0
+                            novo_status = st.selectbox(f"Alterar Status (Consulta #{c_id})", status_opcoes, index=index_status)
+                        
+                        if st.button(f"Salvar Alterações #{c_id}"):
+                            id_medico_banco = dict_medicos[medico_escolhido]
+                            atualizar_status_e_medico_consulta(c_id, id_medico_banco, novo_status)
+                            st.success("Consulta atualizada!")
+                            st.rerun()                      
 
 
 def pagina_medico():
