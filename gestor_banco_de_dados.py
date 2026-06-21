@@ -263,3 +263,49 @@ def listar_medicos_disponiveis():
     cursor_clinica.close()
     conexao_clinica.close()
     return medicos
+
+def listar_medicos_com_turno():
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    # Como adicionamos o Turno no formulário do Admin, certifique-se de que a sua tabela Médicos 
+    # possua a coluna Turno TEXT. Caso não tenha, altere a criação da tabela para incluí-la.
+    # Aqui, para fins de exemplo, vamos buscar da tabela Médicos.
+    try:
+        cursor_clinica.execute("SELECT ID, Nome, Turno FROM Médicos")
+        medicos = cursor_clinica.fetchall()
+    except sqlite3.OperationalError:
+        # Caso sua tabela não tenha a coluna Turno ainda, uma alternativa é buscar de Colaboradores
+        # ou assumir que todos são Integrais temporariamente até você recriar o banco.
+        cursor_clinica.execute("SELECT ID, Nome, 'Integral (07h às 17h)' FROM Médicos")
+        medicos = cursor_clinica.fetchall()
+        
+    cursor_clinica.close()
+    conexao_clinica.close()
+    return medicos
+
+def listar_horarios_ocupados(medico_id, data_texto):
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    # Busca os horários de consultas marcadas para o médico específico na data específica
+    # ignorando consultas que foram 'Canceladas'
+    cursor_clinica.execute('''
+        SELECT Horario FROM Consultas 
+        WHERE Medico_ID = ? AND Data = ? AND Status != 'Cancelado'
+    ''', (medico_id, data_texto))
+    
+    agendados = cursor_clinica.fetchall()
+    cursor_clinica.close()
+    conexao_clinica.close()
+    # Retorna uma lista limpa de strings de horários, ex: ['08:00', '10:00']
+    return [item[0] for item in agendados]
+
+def inserir_consulta(tutor_id, pet_id, medico_id, data_texto, horario_texto):
+    conexao_clinica = conectar_banco()
+    cursor_clinica = conexao_clinica.cursor()
+    cursor_clinica.execute('''
+        INSERT INTO Consultas (Tutor_ID, Pet_ID, Medico_ID, Data, Horario, Status)
+        VALUES (?, ?, ?, ?, ?, 'Agendado')
+    ''', (tutor_id, pet_id, medico_id, data_texto, horario_texto))
+    conexao_clinica.commit()
+    cursor_clinica.close()
+    conexao_clinica.close()

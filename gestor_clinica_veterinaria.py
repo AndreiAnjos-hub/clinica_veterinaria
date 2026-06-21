@@ -125,14 +125,16 @@ from gestor_banco_de_dados import (
     buscar_tutor_por_usuario, salvar_ou_atualizar_tutor, obter_tutor_id,
     listar_pets_do_tutor, salvar_ou_atualizar_pet, listar_usuarios_colaboradores_sem_crmv,
     cadastrar_medico_completo, listar_consultas_geral, atualizar_status_e_medico_consulta,
-    listar_medicos_disponiveis)
+    listar_medicos_disponiveis, listar_medicos_com_turno, listar_horarios_ocupados,
+    inserir_consulta)
 
+import time
 import random
 import hashlib
 import sqlite3
+import datetime
 import pandas as pd
 import streamlit as st
-from datetime import datetime
 
 criar_tabelas()
 
@@ -281,8 +283,10 @@ def pagina_usuario():
                         email=st.session_state.email, # O email vem do session_state do login
                         telefone=telefone_tutor
                     )
-                    st.rerun() # Atualiza a tela para mostrar os dados novos
+                    # st.rerun() # Atualiza a tela para mostrar os dados novos
                     st.success("Dados salvos com sucesso!")
+                    time.sleep(3)
+                    st.rerun()
 
     # Coloque o formulário de tutor aqui...
     with aba_pets:
@@ -389,10 +393,166 @@ def pagina_usuario():
                             )
                         st.rerun() # Dá o reload na página, limpando os campos ou aplicando a alteração!
                         st.success(f"Pet '{nome_pet}' salvo com sucesso!")
+                        time.sleep(3)
+                        st.rerun()
 
     with aba_agendar:
-        st.subheader("Agende uma consulta")
+        st.subheader("📅 Agende uma Consulta para o seu Pet")
         st.markdown("---")
+    
+        # Validação: O usuário precisa ser tutor e ter pets cadastrados
+        info_tutor = obter_tutor_id(st.session_state.usuario_id)
+    
+        if not info_tutor:
+            st.warning("⚠️ Cadastre seus dados pessoais na aba '👤 Meu Perfil' primeiro.")
+        else:
+            tutor_id = info_tutor[0]
+            lista_pets = listar_pets_do_tutor(tutor_id)
+            lista_medicos = listar_medicos_com_turno()
+        
+            if not lista_pets:
+                st.info("🐾 Você precisa cadastrar pelo menos um Pet na aba 'Meus Pets' antes de agendar.")
+            elif not lista_medicos:
+                st.info("👨‍⚕️ Não há médicos cadastrados ou disponíveis na clínica no momento.")
+            else:
+                # Informações fixas da clínica na lateral
+                st.sidebar.markdown("### 🏪 Horário da Clínica")
+                st.sidebar.caption("Segunda a Sexta: 07h às 17h")
+                st.sidebar.caption("Consultas com duração de 1 hora.")
+
+                # --- CAMPOS DINÂMICOS SEM ST.FORM ---
+
+                # 1. Seleção do Pet
+                dict_pets = {p[1]: p[0] for p in lista_pets}
+                pet_nome_sel = st.selectbox("1. Selecione o Pet para a Consulta:", list(dict_pets.keys()))
+                pet_id_sel = dict_pets[pet_nome_sel]
+            
+                # 2. Seleção do Médico (Gera o "reload" automático de horários ao mudar)
+                dict_medicos = {f"Dr(a). {m[1]} — Turno: {m[2]}": (m[0], m[2]) for m in lista_medicos}
+                medico_texto_sel = st.selectbox("2. Selecione o Veterinário:", list(dict_medicos.keys()))
+                medico_id_sel = dict_medicos[medico_texto_sel][0]
+                medico_turno_sel = dict_medicos[medico_texto_sel][1]
+            
+                # 3. Seleção da Data (Gera o "reload" automático de horários ao mudar o dia)
+                data_consulta = st.date_input("3. Selecione a Data:", min_value=datetime.date.today())
+                data_texto = data_consulta.strftime("%Y-%m-%d")
+            
+                # --- PROCESSAMENTO DOS HORÁRIOS (Roda a cada mudança acima) ---
+                if "Manhã" in medico_turno_sel:
+                    grade_horarios = ["07:00", "08:00", "09:00", "10:00", "11:00"]
+                elif "Tarde" in medico_turno_sel:
+                    grade_horarios = ["12:00", "13:00", "14:00", "15:00", "16:00"]
+                else:
+                    grade_horarios = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"]
+            
+                # Busca ocupados no banco em tempo real
+                horarios_ocupados = listar_horarios_ocupados(medico_id_sel, data_texto)
+                horarios_disponiveis = [h for h in grade_horarios if h not in horarios_ocupados]
+            
+                # 4. Exibe a lista já filtrada de Horários
+                if not horarios_disponiveis:
+                    st.error("❌ Não há horários livres para este médico nesta data. Escolha outro dia ou profissional.")
+                    horario_selecionado = None
+                else:
+                    horario_selecionado = st.selectbox("4. Selecione o Horário Disponível:", horarios_disponiveis)
+            
+                # Espaçador visual antes do botão
+                st.write("")
+            
+                # Botão avulso de confirmação
+                if st.button("Confirmar Agendamento", type="primary"):
+                    if not horario_selecionado:
+                        st.error("Não foi possível agendar. Selecione um horário válido.")
+                    else:
+                        # Grava no banco de dados
+                        inserir_consulta(tutor_id, pet_id_sel, medico_id_sel, data_texto, horario_selecionado)
+                        st.success(f"🎉 Consulta agendada com sucesso para {pet_nome_sel} no dia {data_consulta.strftime('%d/%m/%Y')} às {horario_selecionado}!")
+                        st.balloons()
+                     
+                        # Um pequeno delay e recarrega para atualizar a tela
+                        time.sleep(5)
+                        st.rerun()
+
+    # with aba_agendar:
+    #     st.subheader("📅 Agende uma Consulta para o seu Pet")
+    #     st.markdown("---")
+    
+    #     # 1. Validação: O usuário precisa ser tutor e ter pets cadastrados
+    #     info_tutor = obter_tutor_id(st.session_state.usuario_id)
+    
+    #     if not info_tutor:
+    #         st.warning("⚠️ Cadastre seus dados pessoais na aba '👤 Meu Perfil' primeiro.")
+    #     else:
+    #         tutor_id = info_tutor[0]
+    #         lista_pets = listar_pets_do_tutor(tutor_id)
+    #         lista_medicos = listar_medicos_com_turno()
+        
+    #         if not lista_pets:
+    #             st.info("🐾 Você precisa cadastrar pelo menos um Pet na aba 'Meus Pets' antes de agendar.")
+    #         elif not lista_medicos:
+    #             st.info("👨‍⚕️ Não há médicos cadastrados ou disponíveis na clínica no momento.")
+    #         else:
+    #             # Informações fixas da clínica na tela para o cliente
+    #             st.sidebar.markdown("### 🏪 Horário da Clínica")
+    #             st.sidebar.caption("Segunda a Sexta: 07h às 17h")
+    #             st.sidebar.caption("Consultas com duração de 1 hora.")
+
+    #             # Formulário estruturado
+    #             with st.form("form_agendamento_consulta"):
+    #                 # Passos de seleção
+    #                 dict_pets = {p[1]: p[0] for p in lista_pets}
+    #                 pet_nome_sel = st.selectbox("1. Selecione o Pet para a Consulta:", list(dict_pets.keys()))
+    #                 pet_id_sel = dict_pets[pet_nome_sel]
+                
+    #                 # Seleção do Médico
+    #                 # Formata a exibição do médico mostrando o turno dele na lista
+    #                 dict_medicos = {f"Dr(a). {m[1]} — Turno: {m[2]}": (m[0], m[2]) for m in lista_medicos}
+    #                 medico_texto_sel = st.selectbox("2. Selecione o Veterinário:", list(dict_medicos.keys()))
+    #                 medico_id_sel = dict_medicos[medico_texto_sel][0]
+    #                 medico_turno_sel = dict_medicos[medico_texto_sel][1]
+                
+    #                 # Calendário para o Dia (Bloqueia datas passadas para não agendar retroativo)
+    #                 data_consulta = st.date_input("3. Selecione a Data:", min_value=datetime.date.today())
+    #                 data_texto = data_consulta.strftime("%Y-%m-%d")
+                
+    #                 # --- LÓGICA DINÂMICA DE HORÁRIOS ---
+    #                 # Define a grade completa de horários baseado no Turno do médico escolhido
+    #                 if "Manhã" in medico_turno_sel:
+    #                     grade_horarios = ["07:00", "08:00", "09:00", "10:00", "11:00"]
+    #                 elif "Tarde" in medico_turno_sel:
+    #                     grade_horarios = ["12:00", "13:00", "14:00", "15:00", "16:00"]
+    #                 else: # Caso seja o turno Integral (07h às 17h)
+    #                     grade_horarios = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"]
+                
+    #                 # Busca quais horários desse médico já estão ocupados nessa data específica
+    #                 horarios_ocupados = listar_horarios_ocupados(medico_id_sel, data_texto)
+                
+    #                 # Filtra a lista mantendo APENAS os horários que não estão ocupados
+    #                 horarios_disponiveis = [h for h in grade_horarios if h not in horarios_ocupados]
+                
+    #                 # Exibe o selectbox dinâmico de horas
+    #                 if not horarios_disponiveis:
+    #                     st.error("❌ Não há horários livres para este médico nesta data. Escolha outro dia ou profissional.")
+    #                     horario_selecionado = None
+    #                 else:
+    #                     horario_selecionado = st.selectbox("4. Selecione o Horário Disponível:", horarios_disponiveis)
+
+    #                 st.write("")
+                
+    #                 # Botão para enviar
+    #                 botao_agendar = st.form_submit_button("Confirmar Agendamento")
+                
+    #                 if botao_agendar:
+    #                     if not horario_selecionado:
+    #                         st.error("Não foi possível agendar. Selecione um horário válido.")
+    #                     else:
+    #                         # Salva na tabela Consultas
+    #                         inserir_consulta(tutor_id, pet_id_sel, medico_id_sel, data_texto, horario_selecionado)
+    #                         st.success(f"🎉 Consulta agendada com sucesso para {pet_nome_sel} no dia {data_consulta.strftime('%d/%m/%Y')} às {horario_selecionado}!")
+    #                         st.balloons()
+
+    #                         time.sleep(2)
+    #                         st.rerun()
 
     with aba_historico:
         st.subheader("Consultas salvas")
@@ -443,6 +603,7 @@ def pagina_admin():
                         sucesso = cadastrar_medico_completo(usuario_id_selecionado, nome_medico, email_selecionado, crmv_medico, turno)
                         if sucesso:
                             st.success(f"Médico {nome_medico} cadastrado com sucesso!")
+                            time.sleep(3)
                             st.rerun()
                         else:
                             st.error("Erro ao salvar no banco. Verifique se o CRMV já existe.")
@@ -509,7 +670,8 @@ def pagina_admin():
                             id_medico_banco = dict_medicos[medico_escolhido]
                             atualizar_status_e_medico_consulta(c_id, id_medico_banco, novo_status)
                             st.success("Consulta atualizada!")
-                            st.rerun()                      
+                            time.sleep(5)          
+                            st.rerun()        
 
 
 def pagina_medico():
