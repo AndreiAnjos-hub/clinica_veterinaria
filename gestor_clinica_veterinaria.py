@@ -123,17 +123,17 @@
 from gestor_banco_de_dados import (
     conectar_banco, criar_tabelas, hash_senha, buscar_usuario, buscar_colaborador, 
     buscar_tutor_por_usuario, salvar_ou_atualizar_tutor, obter_tutor_id,
-    listar_pets_do_tutor, salvar_ou_atualizar_pet, listar_usuarios_colaboradores_sem_crmv,
-    cadastrar_medico_completo, listar_consultas_geral, atualizar_status_e_medico_consulta,
+    listar_pets_do_tutor, salvar_ou_atualizar_pet, listar_usuarios_colaboradores_sem_crmv, admin_cadastrar_medico_completo,
+    listar_consultas_geral, atualizar_status_e_medico_consulta,
     listar_medicos_disponiveis, listar_medicos_com_turno, listar_horarios_ocupados,
     inserir_consulta)
 
 import time
-import random
-import hashlib
-import sqlite3
+# import random
+# import hashlib
+# import sqlite3
 import datetime
-import pandas as pd
+# import pandas as pd
 import streamlit as st
 
 criar_tabelas()
@@ -570,43 +570,51 @@ def pagina_admin():
         "⏰ Escalas e Horários", 
         "📋 Gerenciar Consultas"
         ])
-            
+    
     # ---------------------------------------------------------
     # # ABA 1: CADASTRAR MÉDICO
     # # ---------------------------------------------------------
     with aba_cadastrar:
-        st.subheader("Cadastrar Novo Médico no Sistema")
-        st.write("Selecione um usuário do tipo colaborador pré-existente para ativá-lo como médico informando seu CRMV.")
+        st.subheader("👨‍⚕️ Cadastrar Novo Médico do Zero")
+        st.write("Preencha todos os dados abaixo para criar a conta de acesso e o registro profissional do médico.")
+        
+        with st.form("form_cadastro_medico_do_zero", clear_on_submit=True):
+            col_dados1, col_dados2 = st.columns(2)
             
-        # Lista e-mails de contas que são colaboradores mas ainda não viraram médicos no sistema
-        colaboradores_disponiveis = listar_usuarios_colaboradores_sem_crmv()
-            
-        if not colaboradores_disponiveis:
-            st.info("Não há novos usuários colaboradores pendentes de cadastro médico.")
-        else:
-            # Cria dicionário para o selectbox mostrar o Email
-            dict_colab = {item[1]: item[0] for item in colaboradores_disponiveis}
-            email_selecionado = st.selectbox("Selecione o E-mail do Colaborador:", list(dict_colab.keys()))
-            usuario_id_selecionado = dict_colab[email_selecionado]
-                
-            with st.form("form_cadastro_medico"):
+            with col_dados1:
                 nome_medico = st.text_input("Nome Completo do Médico")
+                email_medico = st.text_input("E-mail de Acesso")
+                senha_medico = st.text_input("Senha Inicial", type="password", help="O médico usará este e-mail e senha para logar.")
+            
+            with col_dados2:
                 crmv_medico = st.text_input("Número do CRMV", placeholder="Ex: 12345-SP")
-                turno = st.selectbox("Turno de Trabalho", ["Integral (07h às 17h)", "Manhã (07h às 12h)", "Tarde (12h às 17h)"])
-                    
-                botao_medico = st.form_submit_button("Efetivar Médico")
-                    
-                if botao_medico:
-                    if not nome_medico or not crmv_medico:
-                        st.warning("Preencha o Nome e o CRMV.")
+                turno_medico = st.selectbox("Turno de Trabalho", ["Integral (07h às 17h)", "Manhã (07h às 12h)", "Tarde (12h às 17h)"])
+        
+            # Botão de envio
+            botao_cadastrar = st.form_submit_button("Criar e Ativar Médico")
+
+            if botao_cadastrar:
+                # Validação simples de campos vazios
+                if not nome_medico or not email_medico or not senha_medico or not crmv_medico:
+                    st.warning("⚠️ Todos os campos são obrigatórios para efetuar o cadastro.")
+                else:
+                    # Dispara a função mágica que alimenta as 3 tabelas
+                    sucesso, mensagem = admin_cadastrar_medico_completo(
+                        nome=nome_medico,
+                        email=email_medico,
+                        senha_plana=senha_medico,
+                        crmv=crmv_medico,
+                        turno=turno_medico
+                    )
+                    if sucesso:
+                        st.success(mensagem)
+                        time.sleep(3)
+                        st.rerun()
+                        # O clear_on_submit=True já vai limpar os campos automaticamente após o sucesso!
                     else:
-                        sucesso = cadastrar_medico_completo(usuario_id_selecionado, nome_medico, email_selecionado, crmv_medico, turno)
-                        if sucesso:
-                            st.success(f"Médico {nome_medico} cadastrado com sucesso!")
-                            time.sleep(3)
-                            st.rerun()
-                        else:
-                            st.error("Erro ao salvar no banco. Verifique se o CRMV já existe.")
+                        st.error(mensagem)
+    
+
     # ---------------------------------------------------------
     # ABA 2: ESCALAS E HORÁRIOS (Para as regras de Negócio da Facul)
     # ---------------------------------------------------------

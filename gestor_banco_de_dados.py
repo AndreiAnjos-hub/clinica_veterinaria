@@ -185,44 +185,67 @@ def salvar_ou_atualizar_pet(pet_id, tutor_id, nome_tutor, nome_pet, especie, rac
 def listar_usuarios_colaboradores_sem_crmv():
     conexao_clinica = conectar_banco()
     cursor_clinica = conexao_clinica.cursor()
-    # Busca usuários do tipo 'Colaborador' que ainda não estão cadastrados na tabela Médicos
+    
+    # Adicionamos C.Nome na busca
     cursor_clinica.execute('''
-        SELECT ID, Email FROM Usuarios 
-        WHERE Tipo = 'Colaborador' 
-        AND ID NOT IN (SELECT Usuario_ID FROM Colaboradores WHERE Tipo = 'Médico')
+        SELECT C.ID, C.Nome, C.Email 
+        FROM Colaboradores C
+        JOIN Usuarios U ON C.Usuario_ID = U.ID
+        WHERE C.Tipo = 'Médico' 
+          AND U.Tipo = 'Colaborador'
+          AND C.ID NOT IN (SELECT Colaborador_ID FROM Médicos)
     ''')
-    usuarios = cursor_clinica.fetchall()
+    
+    colaboradores_pendentes = cursor_clinica.fetchall()
     cursor_clinica.close()
     conexao_clinica.close()
-    return usuarios
+    return colaboradores_pendentes # Agora retorna: [(ID, Nome, Email), ...]
 
-def cadastrar_medico_completo(usuario_id, nome, email, crmv, tipo_turno):
+def admin_cadastrar_medico_completo(nome, email, senha_plana, crmv, turno):
     conexao_clinica = conectar_banco()
     cursor_clinica = conexao_clinica.cursor()
+    
     try:
-        # 1. Insere na tabela Colaboradores se não existir
+        # 1. Criptografa a senha que o admin escolheu para o médico
+        senha_hash = hashlib.sha256(senha_plana.encode()).hexdigest()
+        
+        # 2. INSERT na tabela Usuarios
         cursor_clinica.execute('''
-            INSERT OR IGNORE INTO Colaboradores (Usuario_ID, Nome, Email, Tipo)
+            INSERT INTO Usuarios (Email, Senha, Tipo)
+            VALUES (?, ?, 'Colaborador')
+        ''', (email, senha_hash))
+        
+        # Pega o ID automático que o banco acabou de gerar para esse usuário
+        usuario_id = cursor_clinica.lastrowid
+        
+        # 3. INSERT na tabela Colaboradores
+        cursor_clinica.execute('''
+            INSERT INTO Colaboradores (Usuario_ID, Nome, Email, Tipo)
             VALUES (?, ?, ?, 'Médico')
         ''', (usuario_id, nome, email))
         
-        # Pega o ID gerado em Colaboradores
-        cursor_clinica.execute("SELECT ID FROM Colaboradores WHERE Usuario_ID = ?", (usuario_id,))
-        colaborador_id = cursor_clinica.fetchone()[0]
+        # Pega o ID gerado na tabela Colaboradores para amarrar na tabela Médicos
+        colaborador_id = cursor_clinica.lastrowid
         
-        # 2. Insere na tabela Médicos (Adicione uma coluna 'Turno' se quiser filtrar por turno)
-        # Para simplificar na faculdade, podemos guardar o turno aqui ou direto na agenda
+        # 4. INSERT na tabela Médicos (salvando o CRMV)
         cursor_clinica.execute('''
-            INSERT OR IGNORE INTO Médicos (Colaborador_ID, Nome, CRMV, Email, Turno)
-            VALUES (?, ?, ?, ?)
-        ''', (colaborador_id, nome, crmv, email, tipo_turno))
+            INSERT INTO Médicos (Colaborador_ID, Nome, CRMV, Email, Turno)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (colaborador_id, nome, crmv, email, turno))
         
+        # Se os 3 INSERTs funcionaram sem erros, salvamos tudo de uma vez só!
         conexao_clinica.commit()
-        return True
+        return True, "Médico cadastrado com sucesso!"
+        
+    except sqlite3.IntegrityError:
+        # Caso o e-mail ou CRMV já existam (por causa do UNIQUE do banco)
+        return False, "Erro de duplicidade: Verifique se o E-mail ou CRMV já estão cadastrados."
     except Exception as e:
-        print(f"Erro ao cadastrar médico: {e}")
-        return False
+        # Caso aconteça qualquer outro erro inesperado
+        return False, f"Erro inesperado: {e}"
     finally:
+        # O fechamento do cursor e da conexão FICA AQUI no finally.
+        # Ele garante que o banco fecha certinho, dando certo ou dando erro.
         cursor_clinica.close()
         conexao_clinica.close()
 
@@ -263,6 +286,44 @@ def listar_medicos_disponiveis():
     cursor_clinica.close()
     conexao_clinica.close()
     return medicos
+
+# def listar_consultas_geral():
+#     conexao_clinica = conectar_banco()
+#     cursor_clinica = conexao_clinica.cursor()
+#     # Query que junta os dados das consultas com nomes de tutores, pets e médicos
+#     cursor_clinica.execute('''
+#         SELECT 
+#             C.ID, T.Nome, P.Pet, M.Nome, C.Data, C.Horario, C.Status
+#         FROM Consultas C
+#         JOIN Tutores T ON C.Tutor_ID = T.ID
+#         JOIN Pets P ON C.Pet_ID = P.ID
+#         LEFT JOIN Médicos M ON C.Medico_ID = M.ID
+#     ''')
+#     consultas = cursor_clinica.fetchall()
+#     cursor_clinica.close()
+#     conexao_clinica.close()
+#     return consultas
+
+# def atualizar_status_e_medico_consulta(consulta_id, medico_id, novo_status):
+#     conexao_clinica = conectar_banco()
+#     cursor_clinica = conexao_clinica.cursor()
+#     cursor_clinica.execute('''
+#         UPDATE Consultas
+#         SET Medico_ID = ?, Status = ?
+#         WHERE ID = ?
+#     ''', (medico_id, novo_status, consulta_id))
+#     conexao_clinica.commit()
+#     cursor_clinica.close()
+#     conexao_clinica.close()
+
+# def listar_medicos_disponiveis():
+#     conexao_clinica = conectar_banco()
+#     cursor_clinica = conexao_clinica.cursor()
+#     cursor_clinica.execute("SELECT ID, Nome FROM Médicos")
+#     medicos = cursor_clinica.fetchall()
+#     cursor_clinica.close()
+#     conexao_clinica.close()
+#     return medicos
 
 def listar_medicos_com_turno():
     conexao_clinica = conectar_banco()
