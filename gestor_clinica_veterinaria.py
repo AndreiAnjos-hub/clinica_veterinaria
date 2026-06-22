@@ -236,7 +236,6 @@ print("Banco carregado e dados inseridos com sucesso!")
 def pagina_usuario():
     st.success(f"👋 Olá, {st.session_state.email}")
     st.markdown("---")
-    st.text(f"👋 Usuário")
 
     # Criando as abas na página do usuário
 
@@ -270,6 +269,7 @@ def pagina_usuario():
             telefone_tutor = st.text_input("Telefone de Contato (com DDD)", value=telefone_inicial, placeholder="(00) 99999-9999")
             
             # Botão de envio do formulário
+            st.write("")
             botao_salvar = st.form_submit_button(texto_botao)
 
             if botao_salvar:
@@ -375,6 +375,8 @@ def pagina_usuario():
                 
                 # Botão de envio
                 texto_botao_pet = "Salvar Alterações" if pet_id_selecionado else "Cadastrar Pet"
+
+                st.write("")
                 botao_salvar_pet = st.form_submit_button(texto_botao_pet)
                 
                 if botao_salvar_pet:
@@ -458,9 +460,22 @@ def pagina_usuario():
             
                 # Espaçador visual antes do botão
                 st.write("")
+                st.markdown("""
+                    <style>
+                    div.stButton > button:first-child {
+                        background-color: #28a745; /* Cor de fundo Verde */
+                        color: white; /* Cor do texto */
+                        border-radius: 8px; /* Cantos arredondados */
+                    }
+                    div.stButton > button:first-child:hover {
+                        background-color: #218838; /* Verde mais escuro quando passa o mouse */
+                        color: white;
+                        }
+                    </style>
+                """, unsafe_allow_html=True)
             
                 # Botão avulso de confirmação
-                if st.button("Confirmar Agendamento", type="primary"):
+                if st.button("Confirmar Agendamento"):
                     if not horario_selecionado:
                         st.error("Não foi possível agendar. Selecione um horário válido.")
                     else:
@@ -591,7 +606,8 @@ def pagina_admin():
                 turno_medico = st.selectbox("Turno de Trabalho", ["Integral (07h às 17h)", "Manhã (07h às 12h)", "Tarde (12h às 17h)"])
         
             # Botão de envio
-            botao_cadastrar = st.form_submit_button("Criar e Ativar Médico")
+            st.write("")
+            botao_cadastrar = st.form_submit_button("Criar e Ativar Médico", type="primary")
 
             if botao_cadastrar:
                 # Validação simples de campos vazios
@@ -713,6 +729,7 @@ if not st.session_state.logado:
         modo = st.radio("Modo", ["Login", "Cadastro"])
         email = st.text_input("E-mail")
         senha = st.text_input("Senha", type="password")
+        st.write("")
         if st.button("Confirmar"):
             if not email or not senha:
                 st.warning("Preencha todos os campos.")
