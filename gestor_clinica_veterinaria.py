@@ -1,139 +1,15 @@
-
-# class FormaPagamento:
-#     def __init__(self, valor):
-#         self.valor = valor
-#         self.data_hora = datetime.now()
-#         self.status = "Pendente"
-
-#     def validar(self):
-#         pass
-
-#     def aprovar_pagamento(self):
-#         self.status = "Aprovado" if random.random() < 0.8 else "Recusado"
-#         return self.status
-
-
-# class Cartao(FormaPagamento):
-#     def __init__(self, numero, nome, validade, cvv, bandeira, valor):
-#         super().__init__(valor)
-#         self.numero = numero
-#         self.nome = nome
-#         self.validade = validade
-#         self.cvv = cvv
-#         self.bandeira = bandeira
-
-#     def validar(self):
-#         if not (self.cvv.isdigit() and len(self.cvv) == 3):
-#             return False, "CVV inválido."
-#         try:
-#             validade_data = datetime.strptime(self.validade, "%m/%Y")
-#             agora = datetime.now()
-#             if (validade_data.year < agora.year) or \
-#                (validade_data.year == agora.year and validade_data.month < agora.month):
-#                 return False, "Cartão expirado."
-#         except:
-#             return False, "Data de validade inválida."
-#         return True, ""
-
-
-# class Boleto(FormaPagamento):
-#     def __init__(self, cpf, nome, vencimento, descricao, valor):
-#         super().__init__(valor)
-#         self.cpf = cpf
-#         self.nome = nome
-#         self.vencimento = vencimento
-#         self.descricao = descricao
-
-#     def validar(self):
-#         if len(self.cpf) != 14:
-#             return False, "CPF inválido."
-#         try:
-#             if datetime.strptime(self.vencimento, "%d/%m/%Y") < datetime.now():
-#                 return False, "Boleto vencido."
-#         except:
-#             return False, "Data de vencimento inválida."
-#         return True, ""
-
-
-# class Pix(FormaPagamento):
-#     def __init__(self, chave, tipo, nome, valor):
-#         super().__init__(valor)
-#         self.chave = chave
-#         self.tipo = tipo
-#         self.nome = nome
-
-#     def validar(self):
-#         if self.tipo == "Email" and "@" not in self.chave or "." not in self.chave.split("@")[-1]:
-#             return False, "E-mail inválido."
-#         if self.tipo == "Telefone" and len(self.chave) != 11:
-#             return False, "Telefone inválido."
-#         return True, ""
-
-
-# def obter_historico_usuario(usuario_id):
-#     conexao_pagamento = conectar_banco()
-    
-#     historico_cartao = pd.read_sql_query('''
-#         SELECT 'Cartão' AS Metodo, 
-#                Numero_Cartao AS Info, 
-#                Valor, 
-#                Data_Hora, 
-#                Status 
-#         FROM Cartao 
-#         WHERE Usuario_ID = ?
-#     ''', conexao_pagamento, params=(usuario_id,))
-    
-#     historico_boleto = pd.read_sql_query('''
-#         SELECT 'Boleto' AS Metodo, 
-#                CPF AS Info, 
-#                Valor, 
-#                Data_Hora, 
-#                Status 
-#         FROM Boleto 
-#         WHERE Usuario_ID = ?
-#     ''', conexao_pagamento, params=(usuario_id,))
-    
-#     historico_pix = pd.read_sql_query('''
-#         SELECT 'Pix' AS Metodo, 
-#                Chave_Pix AS Info, 
-#                Valor, 
-#                Data_Hora, 
-#                Status 
-#         FROM Pix 
-#         WHERE Usuario_ID = ?
-#     ''', conexao_pagamento, params=(usuario_id,))
-    
-#     conexao_pagamento.close()
-    
-#     historico = pd.concat([historico_cartao, historico_boleto, historico_pix], ignore_index=True)
-#     historico.sort_values(by="Data_Hora", ascending=False, inplace=True)
-#     return historico
-
-# # def camuflar_cpf(cpf: str) -> str:
-# #     return f"***.{cpf[4:7]}.***-{cpf[-2:]}"
-
-# # def camuflar_telefone(telefone: str) -> str:
-# #     return f"{telefone[:2]}*****{telefone[-2:]}"
-
-# # def camuflar_email(email: str) -> str:
-# #     partes = email.split("@")
-# #     return partes[0][0] + "***@" + partes[1]
-
-
 from gestor_banco_de_dados import (
     conectar_banco, criar_tabelas, hash_senha, buscar_usuario, buscar_colaborador, 
     buscar_tutor_por_usuario, salvar_ou_atualizar_tutor, obter_tutor_id,
-    listar_pets_do_tutor, salvar_ou_atualizar_pet, listar_usuarios_colaboradores_sem_crmv, admin_cadastrar_medico_completo,
+    listar_pets_do_tutor, salvar_ou_atualizar_pet, admin_cadastrar_medico_completo,
     listar_consultas_geral, atualizar_status_e_medico_consulta,
     listar_medicos_disponiveis, listar_medicos_com_turno, listar_horarios_ocupados,
-    inserir_consulta)
+    inserir_consulta, listar_consultas_do_tutor, listar_consultas_do_medico,
+    medico_salvar_atendimento)
 
 import time
-# import random
-# import hashlib
-# import sqlite3
 import datetime
-# import pandas as pd
+import pandas as pd
 import streamlit as st
 
 criar_tabelas()
@@ -141,12 +17,12 @@ criar_tabelas()
 # --- INSERÇÃO DE DADOS TESTE ---
 
 conexao_clinica = conectar_banco()
-cursor_clinica = conexao_clinica.cursor() # CRUCIAL: Criando o cursor para o fluxo principal
+cursor_clinica = conexao_clinica.cursor()
 
-# 1. EMERSON ROYAL ////////////////////////////////////////////////////////////////////////
+# 1. EMERSON ROYAL /////////////////////
+
 senha = hash_senha("emerson123")
 
-# Usamos INSERT OR IGNORE caso o e-mail já exista no banco
 cursor_clinica.execute('''
     INSERT OR IGNORE INTO Usuarios (Email, Senha, Tipo) VALUES (?, ?, ?)
 ''', ("emersonroyal&@gmail.com", senha, "Colaborador"))
@@ -168,8 +44,8 @@ if usuario:
         ''', (colaborador[0], colaborador[1], "827477", colaborador[2], "Manhã (07h às 12h)"))
         conexao_clinica.commit()
 
+# 2. AYRTON LUCAS ////////////////////////////
 
-# 2. AYRTON LUCAS ////////////////////////////////////////////////////////////////////////
 senha = hash_senha("ayrtonn78")
 
 cursor_clinica.execute('''
@@ -194,7 +70,8 @@ if usuario:
         conexao_clinica.commit()
 
 
-# 3. ANDREI //////////////////////////////////////////////////////////////////////////////
+# 3. ANDREI ////////////////////////////////
+
 senha = hash_senha("andrei21")
 
 cursor_clinica.execute('''
@@ -211,7 +88,8 @@ if usuario:
     conexao_clinica.commit()
 
 
-# 4. DOUGLAS /////////////////////////////////////////////////////////////////////////////
+# 4. DOUGLAS ////////////////////////////////
+
 senha = hash_senha("douglas30")
 
 cursor_clinica.execute('''
@@ -227,17 +105,17 @@ if usuario:
     ''', (usuario[0], "Douglas", usuario[1], "Admin"))
     conexao_clinica.commit()
 
-# Finaliza tudo corretamente
 cursor_clinica.close()
 conexao_clinica.close()
 
+
+
 print("Banco carregado e dados inseridos com sucesso!")
+
 
 def pagina_usuario():
     st.success(f"👋 Olá, {st.session_state.email}")
     st.markdown("---")
-
-    # Criando as abas na página do usuário
 
     aba_perfil, aba_pets, aba_agendar, aba_historico = st.tabs([
         "👤 Meu Perfil", 
@@ -250,10 +128,8 @@ def pagina_usuario():
         st.subheader("📋 Seus Dados Pessoais")
         st.write("Mantenha suas informações de contato atualizadas para que a clínica possa falar com você.")
 
-        # Busca no banco se este usuário já preencheu o perfil de Tutor
         dados_tutor = buscar_tutor_por_usuario(st.session_state.usuario_id)
 
-        # Se ele já tiver dados salvos, preenchemos o formulário com o que existe
         if dados_tutor:
             nome_inicial = dados_tutor[0]
             telefone_inicial = dados_tutor[1]
@@ -263,12 +139,10 @@ def pagina_usuario():
             telefone_inicial = ""
             texto_botao = "Salvar Perfil"
 
-        # Formulário do Streamlit
         with st.form("form_dados_tutor"):
             nome_tutor = st.text_input("Nome Completo", value=nome_inicial)
             telefone_tutor = st.text_input("Telefone de Contato (com DDD)", value=telefone_inicial, placeholder="(00) 99999-9999")
             
-            # Botão de envio do formulário
             st.write("")
             botao_salvar = st.form_submit_button(texto_botao)
 
@@ -276,19 +150,16 @@ def pagina_usuario():
                 if not nome_tutor or not telefone_tutor:
                     st.warning("Por favor, preencha todos os campos antes de salvar.")
                 else:
-                    # Executa a função para salvar ou atualizar no SQLite
                     salvar_ou_atualizar_tutor(
                         usuario_id=st.session_state.usuario_id,
                         nome=nome_tutor,
-                        email=st.session_state.email, # O email vem do session_state do login
+                        email=st.session_state.email,
                         telefone=telefone_tutor
                     )
-                    # st.rerun() # Atualiza a tela para mostrar os dados novos
                     st.success("Dados salvos com sucesso!")
                     time.sleep(3)
                     st.rerun()
 
-    # Coloque o formulário de tutor aqui...
     with aba_pets:
         st.subheader("🐾 Gerenciar Meus Pets")
         
@@ -299,8 +170,7 @@ def pagina_usuario():
         else:
             tutor_id_banco = info_tutor[0]
             nome_tutor_banco = info_tutor[1]
-            # Dados para o selectbox de Raça -> Espécie
-            # # Chave: Raça, Valor: Espécie correspondente
+
             dados_racas = {
                 "Vira-lata (SRD)": "Canina/Felina",
                 "Golden Retriever": "Canina",
@@ -319,61 +189,47 @@ def pagina_usuario():
                 "Gecko-leopardo": "Répteis"
                 }
             
-            # Opções de ação para o usuário
             acao_pet = st.radio("O que deseja fazer?", ["Cadastrar Novo Pet", "Atualizar Pet Existente"], horizontal=True)
             
-            # Inicializando variáveis do formulário
             pet_id_selecionado = None
             nome_pet_inicial = ""
             sexo_inicial = "Macho"
             raca_inicial = "Vira-lata (SRD)"
             
-            # Se o usuário quiser atualizar, precisamos carregar os pets dele
             if acao_pet == "Atualizar Pet Existente":
                 lista_de_pets = listar_pets_do_tutor(tutor_id_banco)
                 
                 if not lista_de_pets:
                     st.info("Você ainda não tem nenhum pet cadastrado para atualizar.")
-                    # Força a voltar para o cadastro se a lista estiver vazia
                     st.stop() 
                 else:
-                    # Criamos um dicionário para o Selectbox mostrar o nome do pet bonitinho
                     opcoes_pets = {f"{p[1]} ({p[2]} - {p[3]})": p for p in lista_de_pets}
                     pet_escolhido_texto = st.selectbox("Selecione o Pet que deseja editar:", list(opcoes_pets.keys()))
                     
-                    # Extrai os dados do pet selecionado
                     pet_dados = opcoes_pets[pet_escolhido_texto]
                     pet_id_selecionado = pet_dados[0]
                     nome_pet_inicial = pet_dados[1]
 
-                    # A raça e sexo salvos no banco (se existirem na nossa lista padrão)
                     raca_inicial = pet_dados[3] if pet_dados[3] in dados_racas else "Vira-lata (SRD)"
                     sexo_inicial = pet_dados[4]
                     
-            # 2. FORMULÁRIO DE CADASTRO / EDIÇÃO
-            # # Usamos uma chave dinâmica no form para resetar os campos no reload automático do Streamlit
             form_key = f"form_pet_{pet_id_selecionado}" if pet_id_selecionado else "form_novo_pet"
             
             with st.form(key=form_key):
                 nome_pet = st.text_input("Nome do Pet", value=nome_pet_inicial)
                 
-                # Selectbox da Raça
                 lista_racas = list(dados_racas.keys())
                 index_raca = lista_racas.index(raca_inicial)
                 raca_selecionada = st.selectbox("Selecione a Raça", lista_racas, index=index_raca)
                 
-                # Descobre a Espécie AUTOMATICAMENTE baseado na raça escolhida
                 especie_automatica = dados_racas[raca_selecionada]
                 
-                # Exibe em um campo de texto desabilitado (só para o usuário ver)
                 st.text_input("Espécie (Definida pela Raça)", value=especie_automatica, disabled=True)
                 
-                # Campo de Sexo
                 opcoes_sexo = ["Macho", "Fêmea"]
                 index_sexo = opcoes_sexo.index(sexo_inicial) if sexo_inicial in opcoes_sexo else 0
                 sexo_selecionado = st.selectbox("Sexo", opcoes_sexo, index=index_sexo)
                 
-                # Botão de envio
                 texto_botao_pet = "Salvar Alterações" if pet_id_selecionado else "Cadastrar Pet"
 
                 st.write("")
@@ -383,7 +239,6 @@ def pagina_usuario():
                     if not nome_pet:
                         st.warning("O nome do seu pet não pode ficar em branco.")
                     else:
-                        # Envia para a função do banco de dados
                         salvar_ou_atualizar_pet(
                             pet_id=pet_id_selecionado,
                             tutor_id=tutor_id_banco,
@@ -393,7 +248,7 @@ def pagina_usuario():
                             raca=raca_selecionada,
                             sexo=sexo_selecionado
                             )
-                        st.rerun() # Dá o reload na página, limpando os campos ou aplicando a alteração!
+                        st.rerun() 
                         st.success(f"Pet '{nome_pet}' salvo com sucesso!")
                         time.sleep(3)
                         st.rerun()
@@ -402,7 +257,6 @@ def pagina_usuario():
         st.subheader("📅 Agende uma Consulta para o seu Pet")
         st.markdown("---")
     
-        # Validação: O usuário precisa ser tutor e ter pets cadastrados
         info_tutor = obter_tutor_id(st.session_state.usuario_id)
     
         if not info_tutor:
@@ -417,29 +271,22 @@ def pagina_usuario():
             elif not lista_medicos:
                 st.info("👨‍⚕️ Não há médicos cadastrados ou disponíveis na clínica no momento.")
             else:
-                # Informações fixas da clínica na lateral
                 st.sidebar.markdown("### 🏪 Horário da Clínica")
                 st.sidebar.caption("Segunda a Sexta: 07h às 17h")
                 st.sidebar.caption("Consultas com duração de 1 hora.")
 
-                # --- CAMPOS DINÂMICOS SEM ST.FORM ---
-
-                # 1. Seleção do Pet
                 dict_pets = {p[1]: p[0] for p in lista_pets}
                 pet_nome_sel = st.selectbox("1. Selecione o Pet para a Consulta:", list(dict_pets.keys()))
                 pet_id_sel = dict_pets[pet_nome_sel]
             
-                # 2. Seleção do Médico (Gera o "reload" automático de horários ao mudar)
                 dict_medicos = {f"Dr(a). {m[1]} — Turno: {m[2]}": (m[0], m[2]) for m in lista_medicos}
                 medico_texto_sel = st.selectbox("2. Selecione o Veterinário:", list(dict_medicos.keys()))
                 medico_id_sel = dict_medicos[medico_texto_sel][0]
                 medico_turno_sel = dict_medicos[medico_texto_sel][1]
             
-                # 3. Seleção da Data (Gera o "reload" automático de horários ao mudar o dia)
                 data_consulta = st.date_input("3. Selecione a Data:", min_value=datetime.date.today())
                 data_texto = data_consulta.strftime("%Y-%m-%d")
-            
-                # --- PROCESSAMENTO DOS HORÁRIOS (Roda a cada mudança acima) ---
+
                 if "Manhã" in medico_turno_sel:
                     grade_horarios = ["07:00", "08:00", "09:00", "10:00", "11:00"]
                 elif "Tarde" in medico_turno_sel:
@@ -447,18 +294,15 @@ def pagina_usuario():
                 else:
                     grade_horarios = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"]
             
-                # Busca ocupados no banco em tempo real
                 horarios_ocupados = listar_horarios_ocupados(medico_id_sel, data_texto)
                 horarios_disponiveis = [h for h in grade_horarios if h not in horarios_ocupados]
             
-                # 4. Exibe a lista já filtrada de Horários
                 if not horarios_disponiveis:
                     st.error("❌ Não há horários livres para este médico nesta data. Escolha outro dia ou profissional.")
                     horario_selecionado = None
                 else:
                     horario_selecionado = st.selectbox("4. Selecione o Horário Disponível:", horarios_disponiveis)
-            
-                # Espaçador visual antes do botão
+
                 st.write("")
                 st.markdown("""
                     <style>
@@ -474,104 +318,61 @@ def pagina_usuario():
                     </style>
                 """, unsafe_allow_html=True)
             
-                # Botão avulso de confirmação
                 if st.button("Confirmar Agendamento"):
                     if not horario_selecionado:
                         st.error("Não foi possível agendar. Selecione um horário válido.")
                     else:
-                        # Grava no banco de dados
                         inserir_consulta(tutor_id, pet_id_sel, medico_id_sel, data_texto, horario_selecionado)
                         st.success(f"🎉 Consulta agendada com sucesso para {pet_nome_sel} no dia {data_consulta.strftime('%d/%m/%Y')} às {horario_selecionado}!")
                         st.balloons()
                      
-                        # Um pequeno delay e recarrega para atualizar a tela
                         time.sleep(5)
                         st.rerun()
 
-    # with aba_agendar:
-    #     st.subheader("📅 Agende uma Consulta para o seu Pet")
-    #     st.markdown("---")
-    
-    #     # 1. Validação: O usuário precisa ser tutor e ter pets cadastrados
-    #     info_tutor = obter_tutor_id(st.session_state.usuario_id)
-    
-    #     if not info_tutor:
-    #         st.warning("⚠️ Cadastre seus dados pessoais na aba '👤 Meu Perfil' primeiro.")
-    #     else:
-    #         tutor_id = info_tutor[0]
-    #         lista_pets = listar_pets_do_tutor(tutor_id)
-    #         lista_medicos = listar_medicos_com_turno()
-        
-    #         if not lista_pets:
-    #             st.info("🐾 Você precisa cadastrar pelo menos um Pet na aba 'Meus Pets' antes de agendar.")
-    #         elif not lista_medicos:
-    #             st.info("👨‍⚕️ Não há médicos cadastrados ou disponíveis na clínica no momento.")
-    #         else:
-    #             # Informações fixas da clínica na tela para o cliente
-    #             st.sidebar.markdown("### 🏪 Horário da Clínica")
-    #             st.sidebar.caption("Segunda a Sexta: 07h às 17h")
-    #             st.sidebar.caption("Consultas com duração de 1 hora.")
-
-    #             # Formulário estruturado
-    #             with st.form("form_agendamento_consulta"):
-    #                 # Passos de seleção
-    #                 dict_pets = {p[1]: p[0] for p in lista_pets}
-    #                 pet_nome_sel = st.selectbox("1. Selecione o Pet para a Consulta:", list(dict_pets.keys()))
-    #                 pet_id_sel = dict_pets[pet_nome_sel]
-                
-    #                 # Seleção do Médico
-    #                 # Formata a exibição do médico mostrando o turno dele na lista
-    #                 dict_medicos = {f"Dr(a). {m[1]} — Turno: {m[2]}": (m[0], m[2]) for m in lista_medicos}
-    #                 medico_texto_sel = st.selectbox("2. Selecione o Veterinário:", list(dict_medicos.keys()))
-    #                 medico_id_sel = dict_medicos[medico_texto_sel][0]
-    #                 medico_turno_sel = dict_medicos[medico_texto_sel][1]
-                
-    #                 # Calendário para o Dia (Bloqueia datas passadas para não agendar retroativo)
-    #                 data_consulta = st.date_input("3. Selecione a Data:", min_value=datetime.date.today())
-    #                 data_texto = data_consulta.strftime("%Y-%m-%d")
-                
-    #                 # --- LÓGICA DINÂMICA DE HORÁRIOS ---
-    #                 # Define a grade completa de horários baseado no Turno do médico escolhido
-    #                 if "Manhã" in medico_turno_sel:
-    #                     grade_horarios = ["07:00", "08:00", "09:00", "10:00", "11:00"]
-    #                 elif "Tarde" in medico_turno_sel:
-    #                     grade_horarios = ["12:00", "13:00", "14:00", "15:00", "16:00"]
-    #                 else: # Caso seja o turno Integral (07h às 17h)
-    #                     grade_horarios = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"]
-                
-    #                 # Busca quais horários desse médico já estão ocupados nessa data específica
-    #                 horarios_ocupados = listar_horarios_ocupados(medico_id_sel, data_texto)
-                
-    #                 # Filtra a lista mantendo APENAS os horários que não estão ocupados
-    #                 horarios_disponiveis = [h for h in grade_horarios if h not in horarios_ocupados]
-                
-    #                 # Exibe o selectbox dinâmico de horas
-    #                 if not horarios_disponiveis:
-    #                     st.error("❌ Não há horários livres para este médico nesta data. Escolha outro dia ou profissional.")
-    #                     horario_selecionado = None
-    #                 else:
-    #                     horario_selecionado = st.selectbox("4. Selecione o Horário Disponível:", horarios_disponiveis)
-
-    #                 st.write("")
-                
-    #                 # Botão para enviar
-    #                 botao_agendar = st.form_submit_button("Confirmar Agendamento")
-                
-    #                 if botao_agendar:
-    #                     if not horario_selecionado:
-    #                         st.error("Não foi possível agendar. Selecione um horário válido.")
-    #                     else:
-    #                         # Salva na tabela Consultas
-    #                         inserir_consulta(tutor_id, pet_id_sel, medico_id_sel, data_texto, horario_selecionado)
-    #                         st.success(f"🎉 Consulta agendada com sucesso para {pet_nome_sel} no dia {data_consulta.strftime('%d/%m/%Y')} às {horario_selecionado}!")
-    #                         st.balloons()
-
-    #                         time.sleep(2)
-    #                         st.rerun()
-
     with aba_historico:
-        st.subheader("Consultas salvas")
+        st.subheader("📋 Suas Consultas e Histórico")
         st.markdown("---")
+    
+        info_tutor = obter_tutor_id(st.session_state.usuario_id)
+    
+        if not info_tutor:
+            st.info("Você ainda não possui dados cadastrados em seu perfil.")
+        else:
+            tutor_id = info_tutor[0]
+            dados_consultas = listar_consultas_do_tutor(tutor_id)
+        
+            if not dados_consultas:
+                st.info("🐾 Você ainda não realizou ou agendou nenhuma consulta.")
+            else:
+                df = pd.DataFrame(dados_consultas, columns=["ID", "Pet", "Veterinário", "Data", "Horário", "Status"])
+            
+                df["Data"] = pd.to_datetime(df["Data"]).dt.strftime("%d/%m/%Y")
+            
+                consultas_ativas = df[df["Status"].isin(["Agendado", "Em Andamento"])]
+                historico_consultas = df[df["Status"].isin(["Concluído", "Cancelado", "Finalizado pelo Admin"])]
+            
+                st.markdown("### 🗓️ Próximas Consultas")
+                if consultas_ativas.empty:
+                    st.caption("Você não tem nenhuma consulta agendada para os próximos dias.")
+                else:
+                    st.dataframe(
+                        consultas_ativas[["Pet", "Veterinário", "Data", "Horário", "Status"]], 
+                        use_container_width=True,
+                        hide_index=True
+                    )
+            
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    st.markdown("### ⏳ Consultas Anteriores")
+
+                    if historico_consultas.empty:
+                        st.caption("Nenhum histórico de consultas anteriores encontrado.")
+                    else:
+                        st.dataframe(
+                            historico_consultas[["Pet", "Veterinário", "Data", "Horário", "Status", "Diagnostico"]], 
+                            use_container_width=True,
+                            hide_index=True
+                        )
 
 
 def pagina_admin():
@@ -585,10 +386,7 @@ def pagina_admin():
         "⏰ Escalas e Horários", 
         "📋 Gerenciar Consultas"
         ])
-    
-    # ---------------------------------------------------------
-    # # ABA 1: CADASTRAR MÉDICO
-    # # ---------------------------------------------------------
+
     with aba_cadastrar:
         st.subheader("👨‍⚕️ Cadastrar Novo Médico do Zero")
         st.write("Preencha todos os dados abaixo para criar a conta de acesso e o registro profissional do médico.")
@@ -703,13 +501,51 @@ def pagina_medico():
     st.markdown("---")
     st.text(f"👋 Médico")
 
-
+    # Adapte para a sua lógica de papel médico
+    st.title("🩺 Painel do Médico Veterinário")
+    
+    consultas_medico = listar_consultas_do_medico(st.session_state.usuario_id)
+    
+    if not consultas_medico:
+        st.info("Nenhuma consulta agendada ou pendente para você no momento.")
+    else:
+        st.subheader("📋 Suas Consultas Cadastradas")
+        
+        for con in consultas_medico:
+            c_id, tutor, pet, especie, raca, data, horario, status, diagnostico_atual = con
+            
+            # Formata um badge visual para o status
+            cor_status = "🔴" if status == "Agendado" else "🟢" if status == "Concluído" else "🟡"
+            
+            with st.expander(f"{cor_status} Atendimento #{c_id} - {pet} ({tutor}) às {horario}"):
+                st.write(f"**Paciente:** {pet} ({especie} - {raca})")
+                st.write(f"**Data/Hora:** {data} às {horario}")
+                st.write(f"**Status Atual:** `{status}`")
+                
+                diagnostico_input = st.text_area(
+                    "Prontuário / Diagnóstico / Recomendações Médicas:", 
+                    value=diagnostico_atual if diagnostico_atual else "",
+                    key=f"diag_{c_id}"
+                )
+                
+                st.markdown("""<style>div.stButton > button { border-radius: 5px; }</style>""", unsafe_allow_html=True)
+                
+                if st.button("💾 Finalizar Consulta e Salvar Laudo", key=f"btn_med_{c_id}"):
+                    if not diagnostico_input.strip():
+                        st.warning("⚠️ Por favor, insira o diagnóstico antes de concluir o atendimento.")
+                    else:
+                        medico_salvar_atendimento(c_id, diagnostico_input)
+                        st.success(f"Consulta #{c_id} concluída com sucesso! Enviada para revisão do Admin.")
+                        import time
+                        time.sleep(1.5)
+                        st.rerun()
 
 
 def validar_email(email):
     if "@" not in email or "." not in email.split("@")[-1]:
         return False, "E-mail inválido"
     return True, ""
+
 
 st.set_page_config(page_title="Petz", layout="wide")
 st.title("🐶 Petz: Cuidando do Seu Animal de Estimação")
@@ -777,107 +613,3 @@ else:
             pagina_admin()
         else:
             pagina_medico()
-
-    # st.success(f"👋 Olá, {st.session_state.email}")
-    # st.markdown("---")
-
-    # aba_pagamento, aba_historico = st.tabs(["💳 Realizar Pagamento", "📜 Histórico de Transações"])
-
-    # with aba_pagamento:
-    #     st.subheader("Escolha o método de pagamento:")
-    #     metodo = st.radio("", ["Cartão", "Boleto", "Pix"], horizontal=True)
-    #     st.markdown("---")
-
-    #     if metodo == "Cartão":
-    #         st.subheader("💳 Pagamento com Cartão")
-    #         col1, col2 = st.columns(2)
-    #         with col1:
-    #             numero = st.text_input("Número do Cartão", max_chars=16)
-    #             validade = st.text_input("Validade (MM/AAAA)")
-    #             cvv = st.text_input("CVV", max_chars=3, type="password")
-    #         with col2:
-    #             nome = st.text_input("Nome do Titular")
-    #             bandeira = st.selectbox("Bandeira", ["Visa", "Mastercard", "Elo", "Amex"])
-    #             valor = st.number_input("Valor", min_value=0.01, step=0.01)
-
-    #         if st.button("💳 Pagar"):
-    #             pagamento = Cartao(numero, nome, validade, cvv, bandeira, valor)
-    #             valido, msg = pagamento.validar()
-    #             if valido:
-    #                 status = pagamento.aprovar_pagamento()
-    #                 conexao_pagamento = conectar_banco()
-    #                 conexao_pagamento.execute('''
-    #                     INSERT INTO Cartao (Usuario_ID, Numero_Cartao, Nome_Cartao, Data_Validade, CVV, Bandeira, Valor, Data_Hora, Status)
-    #                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    #                 ''', (st.session_state.usuario_id, f"****{numero[-4:]}", nome, validade, "***", bandeira, valor, pagamento.data_hora, status))
-    #                 conexao_pagamento.commit()
-    #                 conexao_pagamento.close()
-    #                 st.success(f"Pagamento {status}")
-    #             else:
-    #                 st.error(msg)
-
-    #     elif metodo == "Boleto":
-    #         st.subheader("🧾 Pagamento com Boleto")
-    #         cpf = st.text_input("CPF do Sacado", placeholder="xxx.xxx.xxx-xx")
-    #         nome = st.text_input("Nome do Sacado")
-    #         vencimento = st.text_input("Data de Vencimento (DD/MM/AAAA)")
-    #         descricao = st.text_input("Descrição")
-    #         valor = st.number_input("Valor", min_value=0.01, step=0.01)
-
-    #         if st.button("🧾 Gerar Boleto"):
-    #             pagamento = Boleto(cpf, nome, vencimento, descricao, valor)
-    #             valido, msg = pagamento.validar()
-    #             if valido:
-    #                 status = pagamento.aprovar_pagamento()
-    #                 conexao_pagamento = conectar_banco()
-    #                 cpf_camuflado = camuflar_cpf(cpf)
-    #                 conexao_pagamento.execute('''
-    #                     INSERT INTO Boleto (Usuario_ID, CPF, Nome_Sacado, Data_Vencimento, Descricao, Valor, Data_Hora, Status)
-    #                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    #                 ''', (st.session_state.usuario_id, cpf_camuflado, nome, vencimento, descricao, valor, pagamento.data_hora, status))
-    #                 conexao_pagamento.commit()
-    #                 conexao_pagamento.close()
-    #                 st.success(f"Boleto {status}")
-    #             else:
-    #                 st.error(msg)
-
-    #     elif metodo == "Pix":
-    #         st.subheader("📱 Pagamento via Pix")
-    #         chave = st.text_input("Chave Pix")
-    #         tipo = st.selectbox("Tipo da chave", ["Email", "Telefone", "CPF"])
-    #         nome = st.text_input("Nome do destinatário")
-    #         valor = st.number_input("Valor", min_value=0.01, step=0.01)
-
-    #         if st.button("📲 Enviar Pix"):
-    #             pagamento = Pix(chave, tipo, nome, valor)
-    #             valido, msg = pagamento.validar()
-    #             if valido:
-    #                 status = pagamento.aprovar_pagamento()
-    #                 conexao_pagamento = conectar_banco()
-
-    #                 if tipo.lower() == "email":
-    #                     chave_camuflada = camuflar_email(chave)
-    #                 elif tipo.lower() == "telefone":
-    #                     chave_camuflada = camuflar_telefone(chave)
-    #                 else:
-    #                     chave_camuflada = camuflar_cpf(chave)
-
-    #                 conexao_pagamento.execute('''
-    #                     INSERT INTO Pix (Usuario_ID, Chave_Pix, Tipo_Chave, Nome_Destinatario, Valor, Data_Hora, Status)
-    #                     VALUES (?, ?, ?, ?, ?, ?, ?)
-    #                 ''', (st.session_state.usuario_id, chave_camuflada, tipo, nome, valor, pagamento.data_hora, status))
-    #                 conexao_pagamento.commit()
-    #                 conexao_pagamento.close()
-    #                 st.success(f"Pix {status}")
-    #             else:
-    #                 st.error(msg)
-
-    # with aba_historico:
-    #     st.subheader("📜 Histórico de Transações")
-    #     historico = obter_historico_usuario(st.session_state.usuario_id)
-
-    #     if not historico.empty:
-    #         historico["Data_Hora"] = pd.to_datetime(historico["Data_Hora"]).dt.strftime("%d/%m/%Y %H:%M")
-    #         st.dataframe(historico[["Metodo", "Info", "Valor", "Data_Hora", "Status"]], use_container_width=True)
-    #     else:
-    #         st.info("Nenhuma transação encontrada.")
