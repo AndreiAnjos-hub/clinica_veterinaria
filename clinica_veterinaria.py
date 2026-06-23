@@ -108,7 +108,7 @@ if usuario_emerson:
     if colaborador_emerson:
         cursor_clinica.execute('''
             INSERT OR IGNORE INTO Médicos (Colaborador_ID, Nome, CRMV, Email, Turno) VALUES (?, ?, ?, ?, ?)
-        ''', (colaborador_emerson[0], colaborador_emerson[1], "827477", colaborador_emerson[2], "Manhã (07h às 12h)"))
+        ''', (colaborador_emerson[0], colaborador_emerson[1], "82747-MT", colaborador_emerson[2], "Manhã (07h às 12h)"))
         conexao_clinica.commit()
 
 # Cadastro: Médico Ayrton Lucas
@@ -129,7 +129,7 @@ if usuario_ayrton:
     if colaborador_ayrton:
         cursor_clinica.execute('''
             INSERT OR IGNORE INTO Médicos (Colaborador_ID, Nome, CRMV, Email, Turno) VALUES (?, ?, ?, ?, ?)
-        ''', (colaborador_ayrton[0], colaborador_ayrton[1], "209891", colaborador_ayrton[2], "Tarde (12h às 17h)"))
+        ''', (colaborador_ayrton[0], colaborador_ayrton[1], "29045-MT", colaborador_ayrton[2], "Tarde (12h às 17h)"))
         conexao_clinica.commit()
 
 # Cadastro: Administrador Andrei
